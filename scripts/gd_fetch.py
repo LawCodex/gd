@@ -66,8 +66,15 @@ def docs_on(url):
     """Download links + titles on an edocman category page (all pages)."""
     out, start = [], 0
     while True:
-        u = url + ("?start=%d" % start if start else "")
-        soup = BeautifulSoup(get(u).text, "lxml")
+        u = url + "?start=%d" % start  # explicit: edocman remembers the offset in the session
+        s.cookies.clear()
+        for attempt in range(4):
+            r = get(u)
+            if r.status_code == 200 and "</html>" in r.text[-2000:] and "edocman" in r.text:
+                break
+            print("  incomplete page, retrying", u, r.status_code, flush=True)
+            time.sleep(10)
+        soup = BeautifulSoup(r.text, "lxml")
         got = 0
         for a in soup.select("a.edocman-document-title-link"):
             href = a["href"]
@@ -133,7 +140,7 @@ def main():
         ok = False
         if r.status_code == 200 and r.content[:5] == b"%PDF-":
             cl = r.headers.get("content-length")
-            if not cl or int(cl) == len(r.content):
+            if not cl or r.headers.get("content-encoding") or int(cl) == len(r.content):
                 open(p, "wb").write(r.content)
                 ok = pdf_ok(p)
         if not ok:
